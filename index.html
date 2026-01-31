@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMPATI - Sistem Inventaris Sekolah</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0f172a', // Slate 900
+                        secondary: '#3b82f6', // Blue 500
+                        accent: '#10b981', // Emerald 500
+                        danger: '#ef4444', // Red 500
+                        background: '#f1f5f9', // Slate 100
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 2px solid rgba(255,255,255, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid #fff;
+            width: 16px;
+            height: 16px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+        // --- KONFIGURASI GLOBAL ---
+        const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbxujiAB71kj2D4bACrYPgwcRlmy99mfVS_EvBL-1Vkss82DD-jpMf60Tft2qWDuUBBbkg/exec"; 
+
+        // --- ICONS (SVG Components) ---
+        const Icons = {
+            Box: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>,
+            Grid: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
+            List: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+            Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
+            Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>,
+            ArrowRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+            ArrowLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
+            Clipboard: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>,
+            CheckCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
+            Maximize: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>,
+            Minimize: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            Cloud: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>,
+            CloudOff: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+            User: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>,
+            History: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>,
+            Share: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>,
+            Eye: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+            DownloadImage: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        };
+
+        // --- DUMMY DATA ---
+        const INITIAL_DATA = [
+            { id: 1, code: 'INV-001', name: 'Laptop Acer Aspire', brand: 'Acer', category: 'Elektronik', year: '2023', location: 'Lab Komputer 1', quantity: 15, condition: 'Baik', source: 'Dana BOS', date: '2024-01-10', status: 'Tersedia', price: 7500000 },
+            { id: 2, code: 'INV-002', name: 'Proyektor Epson', brand: 'Epson', category: 'Elektronik', year: '2022', location: 'Ruang Guru', quantity: 2, condition: 'Baik', source: 'Hibah', date: '2024-01-12', status: 'Dipinjam', price: 5000000 },
+            { id: 3, code: 'INV-003', name: 'Meja Siswa', brand: 'Olympic', category: 'Furniture', year: '2021', location: 'Kelas X-A', quantity: 30, condition: 'Rusak Ringan', source: 'Dana Komite', date: '2024-01-15', status: 'Tersedia', price: 450000 },
+            { id: 4, code: 'INV-004', name: 'Mikroskop', brand: 'Yazumi', category: 'Laboratorium', year: '2023', location: 'Lab IPA', quantity: 10, condition: 'Baik', source: 'Dana BOS', date: '2024-02-01', status: 'Tersedia', price: 1200000 },
+        ];
+
+        // --- COMPONENTS ---
+
+        const StatCard = ({ title, value, color, subtext, icon: Icon }) => (
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                <div>
+                    <p className="text-slate-500 text-sm font-medium">{title}</p>
+                    <h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3>
+                    <p className={`text-xs mt-1 ${color === 'red' ? 'text-red-500' : 'text-slate-400'}`}>{subtext}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600' : color === 'green' ? 'bg-emerald-100 text-emerald-600' : color === 'red' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                    <Icon />
+                </div>
+            </div>
+        );
+
+        const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-lg" }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-fade-in`}>
+                        <div className="flex justify-between items-center p-5 border-b sticky top-0 bg-white z-10">
+                            <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+                        </div>
+                        <div className="p-5">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConditionChart = ({ items }) => {
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current) return;
+
+                const conditions = { 'Baik': 0, 'Rusak Ringan': 0, 'Rusak Berat': 0 };
+                items.forEach(i => {
+                    const c = i.condition || 'Baik'; 
+                    if(conditions[c] !== undefined) conditions[c] += i.quantity;
+                    else conditions[c] = (conditions[c] || 0) + i.quantity;
+                });
+
+                const ctx = canvasRef.current.getContext('2d');
+                if (chartInstance.current) chartInstance.current.destroy();
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(conditions),
+                        datasets: [{
+                            data: Object.values(conditions),
+                            backgroundColor: [
+                                'rgba(16, 185, 129, 0.8)', // Emerald
+                                'rgba(245, 158, 11, 0.8)', // Amber
+                                'rgba(239, 68, 68, 0.8)'   // Red
+                            ],
+                            borderColor: [
+                                '#10b981',
+                                '#f59e0b',
+                                '#ef4444'
+                            ],
+                            borderWidth: 1,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } }
+                        }
+                    }
+                });
+
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [items]);
+
+            return <div className="h-64 relative"><canvas ref={canvasRef}></canvas></div>;
+        };
+
+        const CategoryChart = ({ items }) => {
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            useEffect(() => {
+                if (!canvasRef.current) return;
+
+                const categories = {};
+                items.forEach(i => {
+                    const cat = i.category || 'Lainnya';
+                    categories[cat] = (categories[cat] || 0) + i.quantity;
+                });
+
+                const labels = Object.keys(categories);
+                const data = Object.values(categories);
+
+                const ctx = canvasRef.current.getContext('2d');
+                if (chartInstance.current) chartInstance.current.destroy();
+
+                // Professional Blue Palette
+                const bgColors = labels.map((_, i) => `hsla(${210 + (i * 20)}, 90%, 60%, 0.7)`);
+                const borderColors = labels.map((_, i) => `hsla(${210 + (i * 20)}, 90%, 50%, 1)`);
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Jumlah Barang',
+                            data: data,
+                            backgroundColor: bgColors,
+                            borderColor: borderColors,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            barPercentage: 0.6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                padding: 12,
+                                cornerRadius: 8
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { borderDash: [2, 4], color: '#e2e8f0' }
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [items]);
+
+            return <div className="h-64"><canvas ref={canvasRef}></canvas></div>;
+        };
+
+        const App = () => {
+            // --- STATE ---
+            const [view, setView] = useState('dashboard');
+            const [isFullScreen, setIsFullScreen] = useState(false);
+            const [isSimulatedFull, setIsSimulatedFull] = useState(false);
+            const [userRole, setUserRole] = useState('user'); 
+            
+            const [cloudUrl, setCloudUrl] = useState(() => DEFAULT_CLOUD_URL || localStorage.getItem('simpati_cloud_url') || '');
+            const [cloudStatus, setCloudStatus] = useState('idle'); // idle, loading, success, error
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isLoginModalOpen, setIsLoginModalOpen] = useState(false); 
+            
+            const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+            const [itemToDelete, setItemToDelete] = useState(null);
+
+            const [viewItem, setViewItem] = useState(null);
+            const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+            
+            const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+            const [shareData, setShareData] = useState({ url: '', name: '' });
+            const [qrCodeUrl, setQrCodeUrl] = useState('');
+
+            const [items, setItems] = useState(() => {
+                const saved = localStorage.getItem('simpati_items');
+                return saved ? JSON.parse(saved) : INITIAL_DATA;
+            });
+            const [logs, setLogs] = useState([]);
+            const [borrowHistory, setBorrowHistory] = useState([]);
+
+            const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+            const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
+            const [isBulkModalOpen, setIsBulkModalOpen] = useState(false); 
+            const [editingItem, setEditingItem] = useState(null);
+            const [selectedItemForBorrow, setSelectedItemForBorrow] = useState(null);
+
+            const [bulkPreviewData, setBulkPreviewData] = useState([]);
+            
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterCategory, setFilterCategory] = useState('All');
+            
+            // Pagination State
+            const [currentPage, setCurrentPage] = useState(1);
+            const [itemsPerPage, setItemsPerPage] = useState(10);
+
+            // --- HELPERS ---
+            const formatRupiah = (number) => {
+                if (!number) return '-';
+                return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+            };
+
+            const toggleRole = () => {
+                if (userRole === 'user') {
+                    setIsLoginModalOpen(true);
+                } else {
+                    setUserRole('user');
+                }
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const password = e.target.password.value;
+                if (password === 'rahasia') {
+                    setUserRole('admin');
+                    setIsLoginModalOpen(false);
+                } else {
+                    alert("Password Salah! Silakan coba lagi.");
+                    e.target.password.value = ''; // Reset input
+                    e.target.password.focus();
+                }
+            };
+
+            // Handle URL params for Direct Link viewing
+            useEffect(() => {
+                const params = new URLSearchParams(window.location.search);
+                const sharedId = params.get('id');
+                
+                if (sharedId && items.length > 0) {
+                    const found = items.find(i => String(i.id) === String(sharedId));
+                    if (found) {
+                        setViewItem(found);
+                        setIsViewModalOpen(true);
+                        
+                        try {
+                            const cleanUrl = window.location.pathname;
+                            window.history.replaceState({}, document.title, cleanUrl);
+                        } catch (e) {
+                            console.log("History update blocked");
+                        }
+                    }
+                }
+            }, [items]);
+            
+            // Reset page on search/filter change
+            useEffect(() => {
+                setCurrentPage(1);
+            }, [searchTerm, filterCategory]);
+
+            const handleShare = async (item) => {
+                const url = `${window.location.origin}${window.location.pathname}?id=${item.id}`;
+                setShareData({ url, name: item.name });
+
+                try {
+                    // Generate default PNG for display
+                    const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 2 });
+                    setQrCodeUrl(dataUrl);
+                } catch (err) {
+                    console.error(err);
+                }
+                setIsShareModalOpen(true);
+            };
+            
+            const handleCopyLink = () => {
+                const input = document.getElementById('shareUrlInput');
+                if (input) {
+                    input.select();
+                    input.setSelectionRange(0, 99999); // For mobile devices
+                    
+                    try {
+                        const successful = document.execCommand('copy');
+                        if(successful) {
+                            alert('Link berhasil disalin ke clipboard!');
+                        } else {
+                            alert('Gagal menyalin otomatis. Silakan salin manual.');
+                        }
+                    } catch (err) {
+                        alert('Gagal menyalin otomatis. Silakan salin manual.');
+                    }
+                }
+            };
+
+            const downloadQR = async (format) => {
+                const url = shareData.url;
+                try {
+                    let dataUrl;
+                    let filename = `QRCode_${shareData.name.replace(/[^a-z0-9]/gi, '_')}.${format}`;
+                    
+                    if (format === 'png') {
+                         dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2, type: 'image/png' });
+                    } else if (format === 'jpeg') {
+                         dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2, type: 'image/jpeg', rendererOpts: { quality: 1 } });
+                    }
+    
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = dataUrl;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (err) {
+                    console.error(err);
+                    alert("Gagal mengunduh QR Code");
+                }
+            }
+
+            const fetchDataFromCloud = useCallback(async (silent = false) => {
+                if (!cloudUrl) return;
+
+                if (!silent) setCloudStatus('loading');
+                try {
+                    const response = await fetch(cloudUrl);
+                    const data = await response.json();
+                    
+                    if (data && data.items) {
+                        setItems(prev => JSON.stringify(prev) !== JSON.stringify(data.items) ? data.items : prev);
+                        setLogs(prev => JSON.stringify(prev) !== JSON.stringify(data.logs) ? data.logs : prev);
+                        setBorrowHistory(prev => JSON.stringify(prev) !== JSON.stringify(data.history) ? data.history : prev);
+                        if (!silent) setCloudStatus('success');
+                    }
+                } catch (error) {
+                    console.error("Cloud fetch error:", error);
+                    if (!silent) setCloudStatus('error');
+                }
+            }, [cloudUrl]);
+
+            useEffect(() => {
+                fetchDataFromCloud();
+            }, [fetchDataFromCloud]);
+
+            useEffect(() => {
+                if (!cloudUrl) return;
+                const intervalId = setInterval(() => fetchDataFromCloud(true), 15000); 
+                return () => clearInterval(intervalId);
+            }, [cloudUrl, fetchDataFromCloud]);
+
+            const saveDataToCloud = useCallback(async (newItems, newLogs, newHistory) => {
+                if (!cloudUrl) {
+                    localStorage.setItem('simpati_items', JSON.stringify(newItems));
+                    localStorage.setItem('simpati_logs', JSON.stringify(newLogs));
+                    localStorage.setItem('simpati_history', JSON.stringify(newHistory));
+                    return;
+                }
+
+                setCloudStatus('loading');
+                try {
+                    const payload = { items: newItems, logs: newLogs, history: newHistory };
+                    await fetch(cloudUrl, {
+                        method: 'POST',
+                        redirect: "follow",
+                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                        body: JSON.stringify(payload)
+                    });
+                    setCloudStatus('success');
+                    
+                    localStorage.setItem('simpati_items', JSON.stringify(newItems));
+                    localStorage.setItem('simpati_logs', JSON.stringify(newLogs));
+                    localStorage.setItem('simpati_history', JSON.stringify(newHistory));
+                } catch (error) {
+                    console.error("Cloud save error:", error);
+                    setCloudStatus('error');
+                }
+            }, [cloudUrl]);
+
+            const updateAll = (newItems, newLogs, newHistory) => {
+                setItems(newItems);
+                if (newLogs) setLogs(newLogs);
+                if (newHistory) setBorrowHistory(newHistory);
+                saveDataToCloud(newItems, newLogs || logs, newHistory || borrowHistory);
+            };
+
+            const handleFullScreenChange = () => setIsFullScreen(!!document.fullscreenElement);
+            useEffect(() => {
+                document.addEventListener('fullscreenchange', handleFullScreenChange);
+                return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+            }, []);
+            useEffect(() => {
+                const handleEsc = (e) => { if (e.key === 'Escape' && isSimulatedFull) setIsSimulatedFull(false); };
+                window.addEventListener('keydown', handleEsc);
+                return () => window.removeEventListener('keydown', handleEsc);
+            }, [isSimulatedFull]);
+            const toggleFullScreen = () => {
+                if (!document.fullscreenElement && !isSimulatedFull) {
+                    document.documentElement.requestFullscreen().catch(() => setIsSimulatedFull(true));
+                } else {
+                    if (document.fullscreenElement) document.exitFullscreen();
+                    if (isSimulatedFull) setIsSimulatedFull(false);
+                }
+            };
+
+            const addLog = (action, details, currentItems = items, currentHistory = borrowHistory) => {
+                const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action, details };
+                updateAll(currentItems, [newLog, ...logs], currentHistory);
+            };
+
+             const handleDownloadTemplate = () => {
+                const headers = "Kode;Nama;Merk;Kategori;Tahun;Lokasi;Jumlah;Kondisi;Sumber;Harga";
+                const example = "\nINV-00X;Contoh Barang;Merk A;Elektronik;2024;Gudang Utama;10;Baik;Dana BOS;5000000";
+                const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent("\uFEFF" + headers + example);
+                const link = document.createElement("a");
+                link.setAttribute("href", csvContent);
+                link.setAttribute("download", "template_inventaris_simpati.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleDownloadData = () => {
+                if (items.length === 0) {
+                    alert("Belum ada data untuk diunduh.");
+                    return;
+                }
+                const headers = ["Kode", "Nama", "Merk", "Kategori", "Tahun", "Lokasi", "Jumlah", "Kondisi", "Sumber", "Status", "Tanggal Input", "Harga"];
+                const csvRows = [headers.join(';')];
+                items.forEach(item => {
+                    const clean = (text) => String(text || '').replace(/;/g, ',').replace(/[\r\n]+/g, ' ');
+                    const row = [
+                        clean(item.code), clean(item.name), clean(item.brand), clean(item.category),
+                        clean(item.year), clean(item.location), item.quantity, clean(item.condition),
+                        clean(item.source), clean(item.status), clean(item.date), clean(item.price)
+                    ];
+                    csvRows.push(row.join(';'));
+                });
+                const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent("\uFEFF" + csvRows.join("\n"));
+                const link = document.createElement("a");
+                link.setAttribute("href", csvContent);
+                link.setAttribute("download", `backup_data_simpati_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }; 
+
+            // FUNGSI BARU: Handle Input Text / Copy-Paste
+            const processRawText = (text) => {
+                if (!text.trim()) return;
+
+                const lines = text.split(/\r?\n/);
+                const parsedData = [];
+                
+                const firstLine = lines[0];
+                let separator = ',';
+                if (firstLine.includes('\t')) separator = '\t';
+                else if (firstLine.includes(';')) separator = ';';
+
+                let startIndex = 0;
+                if (firstLine.toLowerCase().includes('kode') || firstLine.toLowerCase().includes('nama')) {
+                    startIndex = 1;
+                }
+
+                for(let i = startIndex; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const cols = line.split(separator);
+                    
+                    if (cols.length >= 2) {
+                        const cleanCol = (val) => val ? val.trim().replace(/^["']|["']$/g, '') : '';
+                        
+                        parsedData.push({
+                            id: Date.now() + i + Math.random(),
+                            date: new Date().toISOString().split('T')[0],
+                            status: 'Tersedia',
+                            code: cleanCol(cols[0]) || `INV-${Date.now()}-${i}`,
+                            name: cleanCol(cols[1]) || 'Tanpa Nama',
+                            brand: cleanCol(cols[2]) || '-',
+                            category: cleanCol(cols[3]) || 'Lainnya',
+                            year: cleanCol(cols[4]) || '-', // Ubah default tahun menjadi '-'
+                            location: cleanCol(cols[5]) || 'Gudang',
+                            quantity: parseInt(cleanCol(cols[6])) || 0,
+                            condition: cleanCol(cols[7]) || 'Baik',
+                            source: cleanCol(cols[8]) || 'Lainnya',
+                            price: parseInt(cleanCol(cols[9])) || 0
+                        });
+                    }
+                }
+                setBulkPreviewData(parsedData);
+            };
+
+            const handlePaste = (e) => {
+                const text = e.target.value;
+                processRawText(text);
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    processRawText(evt.target.result);
+                    e.target.value = null; // Reset input
+                };
+                reader.readAsText(file);
+            };
+
+            const saveBulkData = () => {
+                if (bulkPreviewData.length === 0) return;
+                const newItems = [...bulkPreviewData, ...items];
+                const newLog = {
+                    id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin',
+                    action: 'Import Massal', details: `Berhasil mengimport ${bulkPreviewData.length} data barang.`
+                };
+                updateAll(newItems, [newLog, ...logs], borrowHistory);
+                setIsBulkModalOpen(false);
+                setBulkPreviewData([]);
+            };
+
+            const handleSaveItem = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData.entries());
+                data.quantity = parseInt(data.quantity);
+                data.price = parseInt(data.price) || 0; // Handle Price
+                if (!data.year) data.year = '-'; // Set default tahun '-' jika kosong
+                
+                let newItems, logDetail;
+                if (editingItem) {
+                    newItems = items.map(item => item.id === editingItem.id ? { ...item, ...data } : item);
+                    logDetail = `Mengubah data barang: ${data.name} (${data.code})`;
+                } else {
+                    const newItem = { id: Date.now(), date: new Date().toISOString().split('T')[0], status: 'Tersedia', ...data };
+                    newItems = [newItem, ...items];
+                    logDetail = `Menambahkan barang baru: ${data.name}`;
+                }
+                const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action: editingItem ? 'Ubah Data' : 'Tambah Data', details: logDetail };
+                updateAll(newItems, [newLog, ...logs], borrowHistory);
+                setIsItemModalOpen(false);
+                setEditingItem(null);
+            };
+
+            const handleDeleteItem = (id) => {
+                if (confirm('Yakin ingin menghapus data ini?')) {
+                    const item = items.find(i => i.id === id);
+                    const newItems = items.filter(i => i.id !== id);
+                    const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action: 'Hapus Data', details: `Menghapus barang: ${item.name}` };
+                    updateAll(newItems, [newLog, ...logs], borrowHistory);
+                }
+            };
+
+            const handleDeleteClick = (item) => {
+                setItemToDelete(item);
+                setIsDeleteModalOpen(true);
+            };
+
+            const confirmDelete = () => {
+                if (!itemToDelete) return;
+                
+                const newItems = items.filter(i => i.id !== itemToDelete.id);
+                
+                const newLog = { 
+                    id: Date.now(), 
+                    timestamp: new Date().toLocaleString('id-ID'), 
+                    user: 'Admin', 
+                    action: 'Hapus Data', 
+                    details: `Menghapus barang: ${itemToDelete.name}` 
+                };
+                
+                updateAll(newItems, [newLog, ...logs], borrowHistory);
+                
+                setIsDeleteModalOpen(false);
+                setItemToDelete(null);
+            };
+
+            const handleBorrow = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const borrowerName = formData.get('borrowerName');
+                const unit = formData.get('unit');
+                const returnDate = formData.get('returnDate');
+                const newItems = items.map(item => item.id === selectedItemForBorrow.id ? { ...item, status: 'Dipinjam' } : item);
+                const transaction = {
+                    id: Date.now(), itemId: selectedItemForBorrow.id, itemName: selectedItemForBorrow.name, itemCode: selectedItemForBorrow.code,
+                    borrowerName, unit, borrowDate: new Date().toISOString().split('T')[0], returnDate, status: 'Dipinjam', actualReturnDate: null
+                };
+                const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action: 'Peminjaman', details: `${borrowerName} meminjam ${selectedItemForBorrow.name}` };
+                updateAll(newItems, [newLog, ...logs], [transaction, ...borrowHistory]);
+                setIsBorrowModalOpen(false);
+                setSelectedItemForBorrow(null);
+            };
+
+            const handleReturn = (historyId) => {
+                const historyItem = borrowHistory.find(h => h.id === historyId);
+                if (!historyItem) return;
+                if(confirm(`Konfirmasi pengembalian ${historyItem.itemName}?`)) {
+                    const newItems = items.map(item => item.id === historyItem.itemId ? { ...item, status: 'Tersedia' } : item);
+                    const newHistory = borrowHistory.map(h => h.id === historyId ? { ...h, status: 'Dikembalikan', actualReturnDate: new Date().toISOString().split('T')[0] } : h);
+                    const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action: 'Pengembalian', details: `${historyItem.borrowerName} mengembalikan ${historyItem.itemName}` };
+                    updateAll(newItems, [newLog, ...logs], newHistory);
+                }
+            };
+
+            const handleSaveSettings = (e) => {
+                e.preventDefault();
+                const url = e.target.elements.url.value;
+                setCloudUrl(url);
+                localStorage.setItem('simpati_cloud_url', url);
+                setIsSettingsOpen(false);
+                alert("URL Cloud tersimpan. Memulai sinkronisasi...");
+            };
+
+            // --- RENDERERS ---
+            const stats = useMemo(() => ({
+                total: items.length,
+                available: items.filter(i => i.status === 'Tersedia').length,
+                borrowed: items.filter(i => i.status === 'Dipinjam').length,
+                damaged: items.filter(i => i.condition.includes('Rusak')).length
+            }), [items]);
+
+            const filteredItems = items.filter(item => {
+                const term = searchTerm.toLowerCase();
+                const matchSearch = item.name.toLowerCase().includes(term) || 
+                                    item.code.toLowerCase().includes(term) ||
+                                    (item.location && item.location.toLowerCase().includes(term));
+                const matchCategory = filterCategory === 'All' || item.category === filterCategory;
+                return matchSearch && matchCategory;
+            });
+
+            const renderDashboard = () => (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <StatCard title="Total Barang" value={stats.total} icon={Icons.Box} color="blue" subtext="Semua aset terdaftar" />
+                        <StatCard title="Tersedia" value={stats.available} icon={Icons.CheckCircle} color="green" subtext="Siap digunakan" />
+                        <StatCard title="Dipinjam" value={stats.borrowed} icon={Icons.Activity} color="orange" subtext="Sedang diluar" />
+                        <StatCard title="Rusak / Maintenance" value={stats.damaged} icon={Icons.Trash} color="red" subtext="Perlu tindakan" />
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                            <h3 className="font-bold text-slate-700 mb-4">Kondisi Aset</h3>
+                            <ConditionChart items={items} />
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                            <h3 className="font-bold text-slate-700 mb-4">Distribusi Kategori</h3>
+                            <CategoryChart items={items} />
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><h3 className="font-bold text-slate-700 mb-4">Aktivitas Terkini</h3><div className="space-y-4">{logs.slice(0, 5).map(log => (<div key={log.id} className="flex items-start gap-3 p-3 hover:bg-slate-50 rounded-lg transition-colors border-l-4 border-slate-200"><div className="flex-1"><div className="flex justify-between"><p className="font-semibold text-slate-800 text-sm">{log.action}</p><span className="text-xs text-slate-400">{log.timestamp}</span></div><p className="text-sm text-slate-600 mt-1">{log.details}</p></div></div>))}{logs.length === 0 && <p className="text-slate-400 text-sm italic">Belum ada aktivitas tercatat.</p>}</div></div>
+                </div>
+            );
+
+            const renderInventory = () => {
+                // Pagination Logic
+                const indexOfLastItem = currentPage * itemsPerPage;
+                const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+                const currentItems = filteredItems.slice(indexOfFirstItem, indexOfLastItem);
+                const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+
+                return (
+                <div className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                        <div className="flex gap-2 flex-1">
+                            <div className="relative flex-1"><span className="absolute left-3 top-3 text-slate-400"><Icons.Search /></span><input type="text" placeholder="Cari nama, kode, atau lokasi..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                            <select className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+                                <option value="All">Semua Kategori</option>
+                                <option value="Elektronik">Elektronik</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Alat Tulis Kerja">Alat Tulis Kerja</option>
+                                <option value="Olahraga">Olahraga</option>
+                                <option value="Laboratorium">Laboratorium</option>
+                                <option value="Alat Peraga">Alat Peraga</option>
+                                <option value="Buku">Buku</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handleDownloadData} className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors" title="Download CSV"><Icons.Download /></button>
+                            {userRole === 'admin' && (
+                                <React.Fragment>
+                                    <button onClick={() => { setBulkPreviewData([]); setIsBulkModalOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"><Icons.Upload /> Import</button>
+                                    <button onClick={() => { setEditingItem(null); setIsItemModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"><Icons.Plus /> Tambah</button>
+                                </React.Fragment>
+                            )}
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs">
+                                    <tr>
+                                        <th className="px-6 py-4">Kode & Nama</th>
+                                        <th className="px-6 py-4">Merk / Type</th>
+                                        <th className="px-6 py-4">Kategori</th>
+                                        <th className="px-6 py-4">Lokasi</th>
+                                        <th className="px-6 py-4">Harga</th>
+                                        <th className="px-6 py-4 text-center">Tahun</th>
+                                        <th className="px-6 py-4">Kondisi</th>
+                                        <th className="px-6 py-4 text-center">Status</th>
+                                        <th className="px-6 py-4 text-center">Jml</th>
+                                        <th className="px-6 py-4 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">{currentItems.map(item => (
+                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="font-medium text-slate-900">{item.name || '-'}</div>
+                                            <div className="text-xs text-slate-500">{item.code || '-'}</div>
+                                        </td>
+                                        <td className="px-6 py-4">{item.brand || '-'}</td>
+                                        <td className="px-6 py-4">{item.category || '-'}</td>
+                                        <td className="px-6 py-4 text-slate-600">{item.location || '-'}</td>
+                                        <td className="px-6 py-4 text-slate-600">{formatRupiah(item.price)}</td>
+                                        <td className="px-6 py-4 text-center">{item.year || '-'}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 rounded text-xs font-medium ${item.condition === 'Baik' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.condition || '-'}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-center"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${item.status === 'Tersedia' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-orange-50 text-orange-600 border border-orange-200'}`}>{item.status === 'Tersedia' ? 'Tersedia' : 'Dipinjam'}</span></td>
+                                        <td className="px-6 py-4 text-center">{item.quantity}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex justify-end gap-2">
+                                                <button onClick={() => handleShare(item)} className="p-1.5 hover:bg-slate-100 text-slate-600 rounded transition-colors" title="Share Link"><Icons.Share /></button>
+                                                {userRole === 'admin' ? (
+                                                    <React.Fragment>
+                                                        {item.status === 'Tersedia' && item.condition === 'Baik' && (
+                                                            <button onClick={() => { setSelectedItemForBorrow(item); setIsBorrowModalOpen(true); }} className="p-1.5 hover:bg-blue-100 text-blue-600 rounded transition-colors" title="Pinjam"><Icons.Clipboard /></button>
+                                                        )}
+                                                        <button onClick={() => { setEditingItem(item); setIsItemModalOpen(true); }} className="p-1.5 hover:bg-yellow-100 text-yellow-600 rounded transition-colors" title="Edit"><Icons.Edit /></button>
+                                                        <button onClick={() => handleDeleteClick(item)} className="p-1.5 hover:bg-red-100 text-red-600 rounded transition-colors" title="Hapus"><Icons.Trash /></button>
+                                                    </React.Fragment>
+                                                ) : null}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                            {currentItems.length === 0 && <div className="p-8 text-center text-slate-400">Data tidak ditemukan.</div>}
+                        </div>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 0 && (
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <span>Tampilkan</span>
+                                <select 
+                                    value={itemsPerPage} 
+                                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                    className="border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                                <span>data per halaman</span>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row items-center gap-4">
+                                <span className="text-sm text-slate-500">
+                                    Menampilkan {filteredItems.length === 0 ? 0 : indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredItems.length)} dari {filteredItems.length} data
+                                </span>
+                                
+                                <div className="flex gap-1">
+                                    <button 
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                    >
+                                        <Icons.ArrowLeft /> <span className="ml-1 hidden sm:inline">Prev</span>
+                                    </button>
+                                    
+                                    {/* Simple Page Numbers */}
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        // Logic to show sliding window of pages could be complex, for now showing first 5 or logic to shift
+                                        // Simple Logic: Show active page and neighbors
+                                        let p = i + 1;
+                                        if (totalPages > 5) {
+                                             if (currentPage > 3) p = currentPage - 2 + i;
+                                             if (p > totalPages) p = totalPages - (4 - i);
+                                        }
+                                        
+                                        // Ensure p is valid
+                                        if (p <= 0 || p > totalPages) return null;
+
+                                        return (
+                                            <button 
+                                                key={p}
+                                                onClick={() => setCurrentPage(p)}
+                                                className={`w-8 h-8 flex items-center justify-center rounded text-sm font-medium border ${
+                                                    currentPage === p 
+                                                        ? 'bg-blue-600 text-white border-blue-600' 
+                                                        : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                                                }`}
+                                            >
+                                                {p}
+                                            </button>
+                                        );
+                                    })}
+
+                                    <button 
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                    >
+                                        <span className="mr-1 hidden sm:inline">Next</span> <Icons.ArrowRight />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                );
+            };
+
+            const renderBorrowing = () => (
+                <div className="space-y-4 animate-fade-in">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4">Riwayat Peminjaman</h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs"><tr><th className="px-6 py-4">Barang</th><th className="px-6 py-4">Peminjam</th><th className="px-6 py-4">Tgl Pinjam</th><th className="px-6 py-4">Tgl Kembali</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{borrowHistory.map(hist => (<tr key={hist.id}><td className="px-6 py-4"><div className="font-medium">{hist.itemName}</div><div className="text-xs text-slate-400">{hist.itemCode}</div></td><td className="px-6 py-4"><div>{hist.borrowerName}</div><div className="text-xs text-slate-400">{hist.unit}</div></td><td className="px-6 py-4">{hist.borrowDate}</td><td className="px-6 py-4">{hist.returnDate}</td><td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-medium ${hist.status === 'Dipinjam' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-700'}`}>{hist.status}</span></td><td className="px-6 py-4 text-right">{(userRole === 'admin' && hist.status === 'Dipinjam') && (<button onClick={() => handleReturn(hist.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded transition-colors">Kembalikan</button>)}{hist.status === 'Dikembalikan' && <span className="text-xs text-slate-400">{hist.actualReturnDate}</span>}</td></tr>))}</tbody></table>{borrowHistory.length === 0 && <div className="p-8 text-center text-slate-400">Belum ada riwayat peminjaman.</div>}</div></div>
+                </div>
+            );
+
+            const renderAudit = () => (
+                <div className="space-y-4 animate-fade-in">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4">Log Aktivitas Sistem</h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs">
+                                    <tr>
+                                        <th className="px-6 py-4">Waktu</th>
+                                        <th className="px-6 py-4">Pengguna</th>
+                                        <th className="px-6 py-4">Aksi</th>
+                                        <th className="px-6 py-4">Detail</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {logs.map(log => (
+                                        <tr key={log.id} className="hover:bg-slate-50">
+                                            <td className="px-6 py-4 text-slate-500 font-mono text-xs">{log.timestamp}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">{log.user}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium 
+                                                    ${['Tambah Data', 'Import Massal'].includes(log.action) ? 'bg-blue-100 text-blue-700' : 
+                                                      ['Hapus Data'].includes(log.action) ? 'bg-red-100 text-red-700' :
+                                                      ['Peminjaman'].includes(log.action) ? 'bg-orange-100 text-orange-700' :
+                                                      'bg-gray-100 text-gray-700'}`}>
+                                                    {log.action}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-600">{log.details}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {logs.length === 0 && <div className="p-8 text-center text-slate-400">Belum ada aktivitas tercatat.</div>}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // --- MAIN LAYOUT ---
+            return (
+                <div className={`min-h-screen flex flex-col md:flex-row font-sans ${isSimulatedFull ? 'fixed inset-0 z-[100] bg-white' : ''}`}>
+                    <nav className="md:w-64 bg-slate-900 text-slate-300 flex flex-col justify-between fixed md:relative bottom-0 w-full z-40 md:h-screen">
+                        <div className="p-6 hidden md:block">
+                            <div className="flex items-center gap-3 mb-8 text-white">
+                                <div className="bg-blue-600 p-2 rounded-lg"><Icons.Grid /></div>
+                                <div>
+                                    <h1 className="text-lg font-bold tracking-tight leading-none">SIMPATI SPANSA</h1>
+                                    <p className="text-[10px] text-slate-400 font-medium tracking-wide mt-0.5">SMPN 1 B. LAMPUNG</p>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.Grid /> Dashboard</button>
+                                <button onClick={() => setView('inventory')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'inventory' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.List /> Data Barang</button>
+                                <button onClick={() => setView('borrowing')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'borrowing' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.Clipboard /> Peminjaman</button>
+                                {userRole === 'admin' && <button onClick={() => setView('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'audit' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.History /> Audit Trail</button>}
+                            </div>
+                        </div>
+                        <div className="md:hidden flex justify-around bg-slate-900 p-4 border-t border-slate-800"><button onClick={() => setView('dashboard')} className={`flex flex-col items-center gap-1 ${view === 'dashboard' ? 'text-blue-500' : 'text-slate-400'}`}><Icons.Grid /> <span className="text-[10px]">Home</span></button><button onClick={() => setView('inventory')} className={`flex flex-col items-center gap-1 ${view === 'inventory' ? 'text-blue-500' : 'text-slate-400'}`}><Icons.List /> <span className="text-[10px]">Barang</span></button><button onClick={() => setView('borrowing')} className={`flex flex-col items-center gap-1 ${view === 'borrowing' ? 'text-blue-500' : 'text-slate-400'}`}><Icons.Clipboard /> <span className="text-[10px]">Pinjam</span></button>{userRole === 'admin' && <button onClick={() => setView('audit')} className={`flex flex-col items-center gap-1 ${view === 'audit' ? 'text-blue-500' : 'text-slate-400'}`}><Icons.History /> <span className="text-[10px]">Audit</span></button>}</div>
+                        <div className="p-6 hidden md:block">
+                            <div className="bg-slate-800 rounded-xl p-4">
+                                <p className="text-xs text-slate-400 mb-1">Login sebagai</p>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <div className="bg-slate-700 p-1 rounded-full"><Icons.User /></div>
+                                        <p className="font-bold text-white capitalize">{userRole}</p>
+                                    </div>
+                                    <button onClick={toggleRole} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors">
+                                        Ganti
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-4 text-center">© 2026 smpn1bbdl. Semua Hak Dilindungi.</p>
+                        </div>
+                    </nav>
+
+                    <main className="flex-1 bg-slate-50 overflow-y-auto h-screen pb-20 md:pb-0">
+                        <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30">
+                            <div>
+                                <h2 className="text-xl md:text-2xl font-bold text-slate-800 capitalize">{view === 'inventory' ? 'Data Inventaris' : view === 'borrowing' ? 'Sirkulasi Barang' : view === 'audit' ? 'Audit Trail' : 'Dashboard Utama'}</h2>
+                                <p className="text-xs md:text-sm text-slate-500 mt-1">Sistem Manajemen Pendataan Inventaris</p>
+                            </div>
+                            <div className="flex items-center gap-2 md:gap-4">
+                                <button 
+                                    onClick={toggleRole}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userRole === 'admin' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                    title={userRole === 'admin' ? "Mode Admin (Klik untuk ganti)" : "Mode User (Klik untuk login Admin)"}
+                                >
+                                    <Icons.User />
+                                    <span className="hidden md:inline uppercase">{userRole}</span>
+                                </button>
+
+                                <div className="flex items-center gap-2" title={cloudUrl ? "Sinkronisasi Aktif" : "Mode Offline"}>
+                                    {cloudStatus === 'loading' && <div className="spinner text-blue-500 border-blue-200"></div>}
+                                    {cloudStatus === 'success' && <span className="text-emerald-500"><Icons.Check /></span>}
+                                    {cloudStatus === 'error' && <span className="text-red-500"><Icons.CloudOff /></span>}
+                                    {!cloudUrl && <span className="text-slate-400"><Icons.CloudOff /></span>}
+                                </div>
+
+                                {userRole === 'admin' && <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors hidden md:block" title="Pengaturan Cloud"><Icons.Settings /></button>}
+                                <button onClick={toggleFullScreen} className="p-2 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors" title="Full Screen">{isFullScreen || isSimulatedFull ? <Icons.Minimize /> : <Icons.Maximize />}</button>
+                            </div>
+                        </header>
+                        <div className="p-4 md:p-8 max-w-7xl mx-auto">{view === 'dashboard' && renderDashboard()}{view === 'inventory' && renderInventory()}{view === 'borrowing' && renderBorrowing()}{view === 'audit' && renderAudit()}</div>
+                    </main>
+
+                    <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Pengaturan Cloud (Google Apps Script)">
+                        <form onSubmit={handleSaveSettings} className="space-y-4">
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800 mb-4"><p className="font-bold mb-2">Cara Agar Data Sinkron di Semua Device:</p><ol className="list-decimal list-inside space-y-1"><li>Pastikan URL Google Script sudah benar.</li><li><b>PENTING:</b> Paste URL yang sama di semua HP/Laptop guru lain.</li><li>Atau, edit file HTML ini dan isi variabel <b>DEFAULT_CLOUD_URL</b> dengan link Anda, lalu bagikan file HTML-nya.</li></ol></div>
+                            <div><label className="block text-sm font-medium text-slate-700 mb-1">URL Web App Google Script</label><input name="url" defaultValue={cloudUrl} className="w-full border rounded-lg p-2.5 text-sm" placeholder="https://script.google.com/macros/s/..../exec" required /></div>
+                            <div className="pt-4 flex justify-end gap-3"><button type="button" onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button><button type="submit" className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Simpan & Sinkronisasi</button></div>
+                        </form>
+                    </Modal>
+
+                    {/* Login Modal */}
+                    <Modal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} title="Login Administrator" maxWidth="max-w-sm">
+                        <form onSubmit={handleLogin} className="space-y-6">
+                            <div className="text-center">
+                                <div className="bg-blue-50 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Icons.User />
+                                </div>
+                                <p className="text-sm text-slate-600">Masukkan password untuk mengakses fitur lengkap Administrator.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Password Admin</label>
+                                <input 
+                                    type="password" 
+                                    name="password" 
+                                    className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                                    placeholder="•••••••" 
+                                    autoFocus 
+                                    required 
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setIsLoginModalOpen(false)} className="flex-1 py-2.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Batal</button>
+                                <button type="submit" className="flex-1 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all">Masuk</button>
+                            </div>
+                        </form>
+                    </Modal>
+
+                    {/* Share Link Modal (NEW) */}
+                    <Modal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} title="Bagikan Tautan Barang" maxWidth="max-w-md">
+                        <div className="space-y-4">
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-3">
+                                <div className="bg-white p-2 rounded-full text-blue-600 shadow-sm">
+                                    <Icons.Share />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-blue-600 font-bold uppercase">Bagikan Detail</p>
+                                    <p className="font-bold text-slate-800 text-sm truncate">{shareData.name}</p>
+                                </div>
+                            </div>
+                            
+                            {/* QR Code Section */}
+                            {qrCodeUrl && (
+                                <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-lg">
+                                    <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+                                    <div className="flex gap-2 mt-3">
+                                        <button onClick={() => downloadQR('png')} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded transition-colors flex items-center gap-1">
+                                            <Icons.DownloadImage /> PNG
+                                        </button>
+                                        <button onClick={() => downloadQR('jpeg')} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded transition-colors flex items-center gap-1">
+                                            <Icons.DownloadImage /> JPEG
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm text-slate-600 mb-2">Salin link di bawah ini untuk membagikan data:</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        id="shareUrlInput"
+                                        type="text" 
+                                        readOnly 
+                                        value={shareData.url} 
+                                        className="flex-1 border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50 text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        onClick={(e) => e.target.select()}
+                                    />
+                                    <button 
+                                        onClick={handleCopyLink}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap"
+                                    >
+                                        <Icons.Clipboard /> Salin
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-2 text-right">
+                                <button onClick={() => setIsShareModalOpen(false)} className="text-slate-500 hover:text-slate-700 text-sm font-medium">Tutup</button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Delete Confirmation Modal */}
+                    <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Konfirmasi Hapus" maxWidth="max-w-sm">
+                        <div className="text-center">
+                            <div className="bg-red-50 text-red-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Icons.Trash />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-2">Hapus Barang?</h3>
+                            <p className="text-sm text-slate-600 mb-6">
+                                Apakah Anda yakin ingin menghapus <strong>{itemToDelete?.name}</strong>? 
+                                Tindakan ini tidak dapat dibatalkan dan data akan hilang dari sistem.
+                            </p>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setIsDeleteModalOpen(false)}
+                                    className="flex-1 py-2.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    onClick={confirmDelete}
+                                    className="flex-1 py-2.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium shadow-lg shadow-red-200 transition-all"
+                                >
+                                    Ya, Hapus
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Item Detail Modal (View Only) */}
+                    <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Detail Barang">
+                        {viewItem && (
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800">{viewItem.name}</h3>
+                                        <p className="text-sm text-slate-500 font-mono mt-1">{viewItem.code}</p>
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${viewItem.status === 'Tersedia' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                        {viewItem.status}
+                                    </span>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Kategori</p>
+                                        <p className="font-medium text-slate-800">{viewItem.category}</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Merk / Type</p>
+                                        <p className="font-medium text-slate-800">{viewItem.brand}</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Lokasi</p>
+                                        <p className="font-medium text-slate-800">{viewItem.location}</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Tahun Perolehan</p>
+                                        <p className="font-medium text-slate-800">{viewItem.year}</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Kondisi</p>
+                                        <p className={`font-medium ${viewItem.condition === 'Baik' ? 'text-emerald-600' : 'text-red-600'}`}>{viewItem.condition}</p>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                        <p className="text-xs text-slate-500 mb-1">Jumlah</p>
+                                        <p className="font-medium text-slate-800">{viewItem.quantity} Unit</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-50 p-3 rounded-lg">
+                                    <div className="flex justify-between">
+                                        <div>
+                                            <p className="text-xs text-slate-500 mb-1">Harga Perolehan</p>
+                                            <p className="font-medium text-slate-800">{formatRupiah(viewItem.price)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-500 mb-1">Sumber Dana</p>
+                                            <p className="font-medium text-slate-800 text-right">{viewItem.source}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2 text-right">
+                                    <button onClick={() => setIsViewModalOpen(false)} className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">Tutup</button>
+                                </div>
+                            </div>
+                        )}
+                    </Modal>
+
+                    <Modal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} title="Import Data Barang (Copy-Paste / Upload)" maxWidth="max-w-4xl">
+                        <div className="space-y-6">
+                            
+                            {/* Opsi 1: Copy Paste (Lebih Mudah) */}
+                            <div className="bg-white rounded-lg border border-slate-200 p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                            <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs">1</span>
+                                            Metode Cepat: Copy-Paste dari Excel
+                                        </h3>
+                                        <p className="text-sm text-slate-500 mt-1">
+                                            Buka Excel, blok data Anda (tanpa header), Copy, lalu Paste di kotak bawah ini.
+                                        </p>
+                                    </div>
+                                    <button onClick={handleDownloadTemplate} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded transition-colors flex items-center gap-1">
+                                        <Icons.Download /> Template Excel
+                                    </button>
+                                </div>
+                                <textarea 
+                                    className="w-full h-32 p-3 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder={`Contoh format (Urutan Kolom):\nKode | Nama | Merk | Kategori | Tahun | Lokasi | Jumlah | Kondisi | Sumber | Harga\n\nPaste data Excel Anda di sini...`}
+                                    onChange={handlePaste}
+                                ></textarea>
+                            </div>
+
+                            {/* Opsi 2: Upload File */}
+                            <div className="flex items-center gap-4">
+                                <div className="h-px bg-slate-200 flex-1"></div>
+                                <span className="text-xs text-slate-400 font-medium">ATAU UPLOAD FILE CSV</span>
+                                <div className="h-px bg-slate-200 flex-1"></div>
+                            </div>
+
+                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:bg-slate-50 transition-colors relative">
+                                <div className="flex flex-col items-center justify-center gap-1">
+                                    <Icons.Upload />
+                                    <p className="text-sm text-slate-600 font-medium">Klik untuk upload file CSV</p>
+                                    <p className="text-xs text-slate-400">Pastikan format kolom sesuai template</p>
+                                </div>
+                                <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                            </div>
+
+                            {/* Preview Section */}
+                            {bulkPreviewData.length > 0 && (
+                                <div className="space-y-3 animate-fade-in border-t pt-4">
+                                    <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                                        <div className="flex items-center gap-2">
+                                            <Icons.CheckCircle />
+                                            <div>
+                                                <h3 className="font-bold text-emerald-800 text-sm">{bulkPreviewData.length} Data Terdeteksi</h3>
+                                                <p className="text-xs text-emerald-600">Siap untuk disimpan ke database</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setBulkPreviewData([])} className="text-xs text-red-500 hover:text-red-700 underline">Hapus/Reset</button>
+                                    </div>
+                                    
+                                    <div className="max-h-60 overflow-y-auto border rounded-lg shadow-inner">
+                                        <table className="w-full text-xs text-left">
+                                            <thead className="bg-slate-100 sticky top-0 text-slate-600">
+                                                <tr>
+                                                    <th className="p-2 border-b font-semibold">Kode</th>
+                                                    <th className="p-2 border-b font-semibold">Nama Barang</th>
+                                                    <th className="p-2 border-b font-semibold">Kategori</th>
+                                                    <th className="p-2 border-b font-semibold text-center">Jml</th>
+                                                    <th className="p-2 border-b font-semibold">Kondisi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {bulkPreviewData.map((d, i) => (
+                                                    <tr key={i} className="hover:bg-slate-50">
+                                                        <td className="p-2 font-mono text-slate-500">{d.code}</td>
+                                                        <td className="p-2 font-medium text-slate-800">{d.name}</td>
+                                                        <td className="p-2 text-slate-600">{d.category}</td>
+                                                        <td className="p-2 text-center">{d.quantity}</td>
+                                                        <td className="p-2">
+                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${d.condition === 'Baik' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                {d.condition}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="flex justify-end pt-2">
+                                        <button 
+                                            onClick={saveBulkData} 
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg font-medium shadow-lg shadow-emerald-200 transition-all transform hover:scale-105 flex items-center gap-2"
+                                        >
+                                            <Icons.Check /> Simpan Semua Data
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Modal>
+
+                    <Modal isOpen={isItemModalOpen} onClose={() => setIsItemModalOpen(false)} title={editingItem ? "Edit Data Barang" : "Tambah Barang Baru"}>
+                        <form onSubmit={handleSaveItem} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Kode Barang</label><input name="code" defaultValue={editingItem?.code} required className="w-full border rounded-lg p-2.5 text-sm" placeholder="Contoh: INV-001" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Tahun Perolehan</label><input name="year" type="text" defaultValue={editingItem?.year} className="w-full border rounded-lg p-2.5 text-sm" placeholder="2024 (Opsional)" /></div></div>
+                            <div><label className="block text-sm font-medium text-slate-700 mb-1">Nama Barang</label><input name="name" defaultValue={editingItem?.name} required className="w-full border rounded-lg p-2.5 text-sm" placeholder="Nama lengkap barang" /></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Merk / Tipe</label><input name="brand" defaultValue={editingItem?.brand} className="w-full border rounded-lg p-2.5 text-sm" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Jumlah</label><input name="quantity" type="number" min="1" defaultValue={editingItem?.quantity} required className="w-full border rounded-lg p-2.5 text-sm" /></div></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Kategori</label>
+                                    <select name="category" defaultValue={editingItem?.category || 'Lainnya'} className="w-full border rounded-lg p-2.5 text-sm">
+                                        <option value="Elektronik">Elektronik</option>
+                                        <option value="Furniture">Furniture</option>
+                                        <option value="Alat Tulis Kerja">Alat Tulis Kerja</option>
+                                        <option value="Olahraga">Olahraga</option>
+                                        <option value="Laboratorium">Laboratorium</option>
+                                        <option value="Alat Peraga">Alat Peraga</option>
+                                        <option value="Buku">Buku</option>
+                                        <option value="Lainnya">Lainnya</option>
+                                    </select>
+                                </div>
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Kondisi</label><select name="condition" defaultValue={editingItem?.condition || 'Baik'} className="w-full border rounded-lg p-2.5 text-sm"><option value="Baik">Baik</option><option value="Rusak Ringan">Rusak Ringan</option><option value="Rusak Berat">Rusak Berat</option></select></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Lokasi Penyimpanan</label><input name="location" defaultValue={editingItem?.location} required className="w-full border rounded-lg p-2.5 text-sm" placeholder="Lab Komputer" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Harga (Opsional)</label><input name="price" type="number" defaultValue={editingItem?.price} className="w-full border rounded-lg p-2.5 text-sm" placeholder="Contoh: 5000000" /></div>
+                            </div>
+                            <div><label className="block text-sm font-medium text-slate-700 mb-1">Sumber Dana</label><select name="source" defaultValue={editingItem?.source || 'Dana BOS'} className="w-full border rounded-lg p-2.5 text-sm"><option value="Dana BOS">Dana BOS</option><option value="Dana Komite">Dana Komite</option><option value="Hibah">Hibah</option><option value="Lainnya">Lainnya</option></select></div>
+                            <div className="pt-4 flex justify-end gap-3"><button type="button" onClick={() => setIsItemModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button><button type="submit" className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Simpan Data</button></div>
+                        </form>
+                    </Modal>
+
+                    <Modal isOpen={isBorrowModalOpen} onClose={() => setIsBorrowModalOpen(false)} title="Form Peminjaman Barang">
+                        {selectedItemForBorrow && (<form onSubmit={handleBorrow} className="space-y-4"><div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4"><p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Barang yang dipinjam</p><p className="text-lg font-bold text-slate-800">{selectedItemForBorrow.name}</p><p className="text-sm text-slate-600">Kode: {selectedItemForBorrow.code}</p></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Nama Peminjam</label><input name="borrowerName" required className="w-full border rounded-lg p-2.5 text-sm" placeholder="Nama Peminjam" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Unit / Kelas</label><input name="unit" required className="w-full border rounded-lg p-2.5 text-sm" placeholder="Contoh: X-TKJ" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Rencana Tanggal Kembali</label><input name="returnDate" type="date" required className="w-full border rounded-lg p-2.5 text-sm" /></div><div className="pt-4 flex justify-end gap-3"><button type="button" onClick={() => setIsBorrowModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button><button type="submit" className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Proses Peminjaman</button></div></form>)}
+                    </Modal>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
